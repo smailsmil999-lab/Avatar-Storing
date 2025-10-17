@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const axios = require('axios');
 const cors = require('cors');
+const sharp = require('sharp');
 const app = express();
 
 // Replace these with your actual credentials
@@ -106,11 +107,34 @@ app.post('/', upload.single('avatar'), async (req, res) => {
 
       let finalAvatarUrl = url;
 
-      // If a data URL is provided, store it directly in metafield
+      // If a data URL is provided, compress it before storing
       if (url && url.startsWith('data:')) {
-        console.log('Storing data URL directly in metafield...');
-        finalAvatarUrl = url; // Store the data URL directly
-        console.log('Data URL stored successfully');
+        console.log('Compressing data URL for storage...');
+        
+        try {
+          // Extract base64 data
+          const base64Data = url.split(',')[1];
+          const mimeType = url.split(';')[0].split(':')[1];
+          
+          // Convert to buffer
+          const buffer = Buffer.from(base64Data, 'base64');
+          
+          // Compress image to reduce size
+          const compressedBuffer = await sharp(buffer)
+            .resize(200, 200, { fit: 'cover' }) // Resize to 200x200 max
+            .jpeg({ quality: 70 }) // Compress JPEG to 70% quality
+            .toBuffer();
+          
+          // Convert back to data URL
+          const compressedBase64 = compressedBuffer.toString('base64');
+          finalAvatarUrl = `data:image/jpeg;base64,${compressedBase64}`;
+          
+          console.log('Data URL compressed successfully, original length:', url.length, 'compressed length:', finalAvatarUrl.length);
+        } catch (compressError) {
+          console.error('Error compressing data URL:', compressError.message);
+          // Fallback: use original URL if compression fails
+          finalAvatarUrl = url;
+        }
       } else if (!url) {
         // If URL is empty, it means remove avatar - delete the metafield
         console.log('Removing avatar - deleting metafield');
