@@ -119,15 +119,35 @@ app.post('/', upload.single('avatar'), async (req, res) => {
           // Convert to buffer
           const buffer = Buffer.from(base64Data, 'base64');
           
-          // Compress image to reduce size
+          // Compress image to reduce size - more aggressive for phone images
           const compressedBuffer = await sharp(buffer)
-            .resize(200, 200, { fit: 'cover' }) // Resize to 200x200 max
-            .jpeg({ quality: 70 }) // Compress JPEG to 70% quality
+            .resize(150, 150, { fit: 'cover' }) // Smaller size for better compression
+            .jpeg({ 
+              quality: 50, // Lower quality for smaller file size
+              progressive: true, // Better compression
+              mozjpeg: true // Use mozjpeg encoder for better compression
+            })
             .toBuffer();
           
           // Convert back to data URL
           const compressedBase64 = compressedBuffer.toString('base64');
           finalAvatarUrl = `data:image/jpeg;base64,${compressedBase64}`;
+          
+          // If still too large, apply even more aggressive compression
+          if (finalAvatarUrl.length > 60000) {
+            console.log('Still too large, applying ultra compression...');
+            const ultraCompressedBuffer = await sharp(buffer)
+              .resize(120, 120, { fit: 'cover' })
+              .jpeg({ 
+                quality: 30, // Very low quality
+                progressive: true,
+                mozjpeg: true
+              })
+              .toBuffer();
+            
+            const ultraCompressedBase64 = ultraCompressedBuffer.toString('base64');
+            finalAvatarUrl = `data:image/jpeg;base64,${ultraCompressedBase64}`;
+          }
           
           console.log('Data URL compressed successfully, original length:', url.length, 'compressed length:', finalAvatarUrl.length);
         } catch (compressError) {
