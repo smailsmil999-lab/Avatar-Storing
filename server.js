@@ -114,19 +114,24 @@ app.post('/', upload.single('avatar'), async (req, res) => {
         const extension = mimeType.split('/')[1];
         
         try {
+          // Convert base64 to buffer
+          const buffer = Buffer.from(base64Data, 'base64');
+          
+          // Create form data for file upload
+          const FormData = require('form-data');
+          const form = new FormData();
+          form.append('file', buffer, {
+            filename: `customer_avatar_${customerId}.${extension}`,
+            contentType: mimeType
+          });
+          
           const fileUploadResponse = await axios.post(
             `https://${SHOPIFY_STORE}/admin/api/2023-10/files.json`,
-            {
-              file: {
-                filename: `customer_avatar_${customerId}.${extension}`,
-                content_type: mimeType,
-                attachment: base64Data
-              }
-            },
+            form,
             {
               headers: {
                 'X-Shopify-Access-Token': ACCESS_TOKEN,
-                'Content-Type': 'application/json'
+                ...form.getHeaders()
               }
             }
           );
