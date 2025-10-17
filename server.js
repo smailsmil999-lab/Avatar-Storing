@@ -112,14 +112,20 @@ app.post('/', upload.single('avatar'), async (req, res) => {
         console.log('Compressing data URL for storage...');
         
         try {
+          console.log('Starting image compression...');
+          console.log('Original data URL length:', url.length);
+          
           // Extract base64 data
           const base64Data = url.split(',')[1];
           const mimeType = url.split(';')[0].split(':')[1];
+          console.log('MIME type:', mimeType);
           
           // Convert to buffer
           const buffer = Buffer.from(base64Data, 'base64');
+          console.log('Buffer size:', buffer.length, 'bytes');
           
           // Compress image to reduce size - more aggressive for phone images
+          console.log('Applying primary compression...');
           const compressedBuffer = await sharp(buffer)
             .resize(150, 150, { fit: 'cover' }) // Smaller size for better compression
             .jpeg({ 
@@ -132,6 +138,7 @@ app.post('/', upload.single('avatar'), async (req, res) => {
           // Convert back to data URL
           const compressedBase64 = compressedBuffer.toString('base64');
           finalAvatarUrl = `data:image/jpeg;base64,${compressedBase64}`;
+          console.log('Primary compression result length:', finalAvatarUrl.length);
           
           // If still too large, apply even more aggressive compression
           if (finalAvatarUrl.length > 60000) {
@@ -147,13 +154,31 @@ app.post('/', upload.single('avatar'), async (req, res) => {
             
             const ultraCompressedBase64 = ultraCompressedBuffer.toString('base64');
             finalAvatarUrl = `data:image/jpeg;base64,${ultraCompressedBase64}`;
+            console.log('Ultra compression result length:', finalAvatarUrl.length);
           }
           
           console.log('Data URL compressed successfully, original length:', url.length, 'compressed length:', finalAvatarUrl.length);
         } catch (compressError) {
-          console.error('Error compressing data URL:', compressError.message);
-          // Fallback: use original URL if compression fails
-          finalAvatarUrl = url;
+          console.error('Error compressing data URL:', compressError);
+          console.error('Compression error details:', compressError.message);
+          console.error('Stack trace:', compressError.stack);
+          
+          // Fallback: try basic compression without advanced options
+          try {
+            console.log('Trying fallback compression...');
+            const fallbackBuffer = await sharp(Buffer.from(url.split(',')[1], 'base64'))
+              .resize(100, 100, { fit: 'cover' })
+              .jpeg({ quality: 40 })
+              .toBuffer();
+            
+            const fallbackBase64 = fallbackBuffer.toString('base64');
+            finalAvatarUrl = `data:image/jpeg;base64,${fallbackBase64}`;
+            console.log('Fallback compression successful, length:', finalAvatarUrl.length);
+          } catch (fallbackError) {
+            console.error('Fallback compression also failed:', fallbackError.message);
+            // Last resort: use original URL
+            finalAvatarUrl = url;
+          }
         }
       } else if (!url) {
         // If URL is empty, it means remove avatar - delete the metafield
