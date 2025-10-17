@@ -23,6 +23,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
+// App Proxy health check endpoint
+app.get('/apps/customer-avatar/health', (req, res) => {
+  res.json({ status: 'OK' });
+});
+
 // GET avatar endpoint
 app.get('/apps/customer-avatar', async (req, res) => {
   try {
