@@ -97,8 +97,11 @@ app.post('/', upload.single('avatar'), async (req, res) => {
   if (req.query.path_prefix === '/apps/customer-avatar') {
     // This is a POST request to /apps/customer-avatar
     try {
-      const { id, url } = req.body; // 'url' will be a data URL or empty string
+      // For App Proxy, data comes in req.body as JSON
+      const { id, url } = req.body;
       const customerId = parseInt(id);
+      
+      console.log('App Proxy POST data:', { id, url, customerId });
 
       let finalAvatarUrl = url;
 
@@ -135,10 +138,12 @@ app.post('/', upload.single('avatar'), async (req, res) => {
         metafield: {
           namespace: 'profile',
           key: 'avatar_url',
-          value: finalAvatarUrl,
+          value: finalAvatarUrl || '', // Ensure value is never undefined
           type: 'single_line_text_field'
         }
       };
+
+      console.log('Saving metafield:', metafieldPayload);
 
       await axios.post(
         `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
