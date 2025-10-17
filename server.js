@@ -28,7 +28,42 @@ app.get('/apps/customer-avatar/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
-// GET avatar endpoint
+// GET avatar endpoint (for App Proxy)
+app.get('/', async (req, res) => {
+  // Check if this is an App Proxy request
+  if (req.query.path_prefix === '/apps/customer-avatar') {
+    // This is a GET request to /apps/customer-avatar
+    try {
+      const customerId = req.query.id;
+      
+      // Fetch customer metafields
+      const response = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': ACCESS_TOKEN
+          }
+        }
+      );
+      
+      const avatarMetafield = response.data.metafields.find(
+        mf => mf.namespace === 'profile' && mf.key === 'avatar_url'
+      );
+      
+      const avatarUrl = avatarMetafield ? avatarMetafield.value : '';
+      
+      res.json({ url: avatarUrl });
+    } catch (error) {
+      console.error('Error fetching avatar:', error.response ? error.response.data : error.message);
+      res.status(500).json({ url: '', error: 'Failed to fetch avatar' });
+    }
+  } else {
+    // Not an App Proxy request, return 404
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// GET avatar endpoint (direct access)
 app.get('/apps/customer-avatar', async (req, res) => {
   try {
     const customerId = req.query.id;
@@ -56,7 +91,78 @@ app.get('/apps/customer-avatar', async (req, res) => {
   }
 });
 
-// POST avatar endpoint
+// POST avatar endpoint (for App Proxy)
+app.post('/', upload.single('avatar'), async (req, res) => {
+  // Check if this is an App Proxy request
+  if (req.query.path_prefix === '/apps/customer-avatar') {
+    // This is a POST request to /apps/customer-avatar
+    try {
+      const { id, url } = req.body; // 'url' will be a data URL or empty string
+      const customerId = parseInt(id);
+
+      let finalAvatarUrl = url;
+
+      // If a data URL is provided, upload it to Shopify Files API
+      if (url && url.startsWith('data:')) {
+        const base64Data = url.split(',')[1];
+        const mimeType = url.split(';')[0].split(':')[1];
+        const extension = mimeType.split('/')[1];
+        
+        const fileUploadResponse = await axios.post(
+          `https://${SHOPIFY_STORE}/admin/api/2023-10/files.json`,
+          {
+            file: {
+              filename: `customer_avatar_${customerId}.${extension}`,
+              content_type: mimeType,
+              attachment: base64Data
+            }
+          },
+          {
+            headers: {
+              'X-Shopify-Access-Token': ACCESS_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        finalAvatarUrl = fileUploadResponse.data.file.url; // Get CDN URL
+      } else if (!url) {
+        // If URL is empty, it means remove avatar
+        finalAvatarUrl = '';
+      }
+      
+      // Update customer metafield
+      const metafieldPayload = {
+        metafield: {
+          namespace: 'profile',
+          key: 'avatar_url',
+          value: finalAvatarUrl,
+          type: 'single_line_text_field'
+        }
+      };
+
+      await axios.post(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
+        metafieldPayload,
+        {
+          headers: {
+            'X-Shopify-Access-Token': ACCESS_TOKEN,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      res.json({ url: finalAvatarUrl });
+    } catch (error) {
+      console.error('Error saving avatar:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to save avatar', details: error.response ? error.response.data : error.message });
+    }
+  } else {
+    // Not an App Proxy request, return 404
+    res.status(404).json({ error: 'Not found' });
+  }
+});
+
+// POST avatar endpoint (direct access)
 app.post('/apps/customer-avatar', upload.single('avatar'), async (req, res) => {
   try {
     const { id, url } = req.body; // 'url' will be a data URL or empty string
