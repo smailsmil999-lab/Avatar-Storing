@@ -159,7 +159,7 @@ app.post('/', upload.single('avatar'), async (req, res) => {
           namespace: 'profile',
           key: 'avatar_url',
           value: finalAvatarUrl,
-          type: 'single_line_text_field'
+          type: 'multi_line_text_field'
         }
       };
 
