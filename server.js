@@ -106,41 +106,11 @@ app.post('/', upload.single('avatar'), async (req, res) => {
 
       let finalAvatarUrl = url;
 
-      // If a data URL is provided, upload it to Shopify Files API
+      // If a data URL is provided, store it directly in metafield
       if (url && url.startsWith('data:')) {
-        console.log('Uploading file to Shopify Files API...');
-        const base64Data = url.split(',')[1];
-        const mimeType = url.split(';')[0].split(':')[1];
-        const extension = mimeType.split('/')[1];
-        
-        try {
-          // Convert base64 to buffer
-          const buffer = Buffer.from(base64Data, 'base64');
-          
-          // Create form data for file upload
-          const FormData = require('form-data');
-          const form = new FormData();
-          form.append('file', buffer, {
-            filename: `customer_avatar_${customerId}.${extension}`,
-            contentType: mimeType
-          });
-          
-          const fileUploadResponse = await axios.post(
-            `https://${SHOPIFY_STORE}/admin/api/2023-10/files.json`,
-            form,
-            {
-              headers: {
-                'X-Shopify-Access-Token': ACCESS_TOKEN,
-                ...form.getHeaders()
-              }
-            }
-          );
-          finalAvatarUrl = fileUploadResponse.data.file.url; // Get CDN URL
-          console.log('File uploaded successfully:', finalAvatarUrl);
-        } catch (fileError) {
-          console.error('Error uploading file:', fileError.response ? fileError.response.data : fileError.message);
-          throw fileError; // Re-throw to be caught by outer catch
-        }
+        console.log('Storing data URL directly in metafield...');
+        finalAvatarUrl = url; // Store the data URL directly
+        console.log('Data URL stored successfully');
       } else if (!url) {
         // If URL is empty, it means remove avatar - delete the metafield
         console.log('Removing avatar - deleting metafield');
