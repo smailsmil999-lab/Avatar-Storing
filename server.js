@@ -5,8 +5,8 @@ const cors = require('cors');
 const app = express();
 
 // Replace these with your actual credentials
-const SHOPIFY_STORE = 'your-store.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
-const ACCESS_TOKEN = 'your-admin-api-access-token'; // Replace with your access token (starts with shpat_)
+const SHOPIFY_STORE = '1euqu4-w1.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
+const ACCESS_TOKEN = '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'; // Replace with your access token (starts with shpat_)
 
 // Configure multer for file uploads
 const upload = multer({ 
