@@ -8,6 +8,7 @@ const app = express();
 const SHOPIFY_STORE = '1euqu4-w1.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
 const ACCESS_TOKEN = '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'; // Replace with your access token (starts with shpat_)
 
+
 // Configure multer for file uploads
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -107,30 +108,38 @@ app.post('/', upload.single('avatar'), async (req, res) => {
 
       // If a data URL is provided, upload it to Shopify Files API
       if (url && url.startsWith('data:')) {
+        console.log('Uploading file to Shopify Files API...');
         const base64Data = url.split(',')[1];
         const mimeType = url.split(';')[0].split(':')[1];
         const extension = mimeType.split('/')[1];
         
-        const fileUploadResponse = await axios.post(
-          `https://${SHOPIFY_STORE}/admin/api/2023-10/files.json`,
-          {
-            file: {
-              filename: `customer_avatar_${customerId}.${extension}`,
-              content_type: mimeType,
-              attachment: base64Data
+        try {
+          const fileUploadResponse = await axios.post(
+            `https://${SHOPIFY_STORE}/admin/api/2023-10/files.json`,
+            {
+              file: {
+                filename: `customer_avatar_${customerId}.${extension}`,
+                content_type: mimeType,
+                attachment: base64Data
+              }
+            },
+            {
+              headers: {
+                'X-Shopify-Access-Token': ACCESS_TOKEN,
+                'Content-Type': 'application/json'
+              }
             }
-          },
-          {
-            headers: {
-              'X-Shopify-Access-Token': ACCESS_TOKEN,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        finalAvatarUrl = fileUploadResponse.data.file.url; // Get CDN URL
+          );
+          finalAvatarUrl = fileUploadResponse.data.file.url; // Get CDN URL
+          console.log('File uploaded successfully:', finalAvatarUrl);
+        } catch (fileError) {
+          console.error('Error uploading file:', fileError.response ? fileError.response.data : fileError.message);
+          throw fileError; // Re-throw to be caught by outer catch
+        }
       } else if (!url) {
         // If URL is empty, it means remove avatar
         finalAvatarUrl = '';
+        console.log('Removing avatar (empty URL)');
       }
       
       // Update customer metafield
@@ -145,7 +154,7 @@ app.post('/', upload.single('avatar'), async (req, res) => {
 
       console.log('Saving metafield:', metafieldPayload);
 
-      await axios.post(
+      const metafieldResponse = await axios.post(
         `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
         metafieldPayload,
         {
@@ -156,9 +165,12 @@ app.post('/', upload.single('avatar'), async (req, res) => {
         }
       );
       
+      console.log('Metafield saved successfully:', metafieldResponse.data);
       res.json({ url: finalAvatarUrl });
     } catch (error) {
-      console.error('Error saving avatar:', error.response ? error.response.data : error.message);
+      console.error('Error saving avatar - Full error:', error);
+      console.error('Error response:', error.response ? error.response.data : 'No response data');
+      console.error('Error status:', error.response ? error.response.status : 'No status');
       res.status(500).json({ error: 'Failed to save avatar', details: error.response ? error.response.data : error.message });
     }
   } else {
