@@ -142,17 +142,53 @@ app.post('/', upload.single('avatar'), async (req, res) => {
           throw fileError; // Re-throw to be caught by outer catch
         }
       } else if (!url) {
-        // If URL is empty, it means remove avatar
-        finalAvatarUrl = '';
-        console.log('Removing avatar (empty URL)');
+        // If URL is empty, it means remove avatar - delete the metafield
+        console.log('Removing avatar - deleting metafield');
+        
+        try {
+          // First, get existing metafields to find the avatar metafield ID
+          const existingMetafields = await axios.get(
+            `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
+            {
+              headers: {
+                'X-Shopify-Access-Token': ACCESS_TOKEN
+              }
+            }
+          );
+          
+          const avatarMetafield = existingMetafields.data.metafields.find(
+            mf => mf.namespace === 'profile' && mf.key === 'avatar_url'
+          );
+          
+          if (avatarMetafield) {
+            // Delete the existing metafield
+            await axios.delete(
+              `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields/${avatarMetafield.id}.json`,
+              {
+                headers: {
+                  'X-Shopify-Access-Token': ACCESS_TOKEN
+                }
+              }
+            );
+            console.log('Avatar metafield deleted successfully');
+          } else {
+            console.log('No avatar metafield found to delete');
+          }
+        } catch (deleteError) {
+          console.error('Error deleting metafield:', deleteError.response ? deleteError.response.data : deleteError.message);
+          throw deleteError;
+        }
+        
+        res.json({ url: '' });
+        return; // Exit early for removal
       }
       
-      // Update customer metafield
+      // Update customer metafield (only for non-empty values)
       const metafieldPayload = {
         metafield: {
           namespace: 'profile',
           key: 'avatar_url',
-          value: finalAvatarUrl || '', // Ensure value is never undefined
+          value: finalAvatarUrl,
           type: 'single_line_text_field'
         }
       };
