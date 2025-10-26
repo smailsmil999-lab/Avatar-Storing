@@ -7,7 +7,7 @@ const app = express();
 
 // Replace these with your actual credentials
 const SHOPIFY_STORE = 'cugbvd-j5.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
-const ACCESS_TOKEN = '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'; // Replace with your access token (starts with shpat_)
+const ACCESS_TOKEN = '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'; // Replace with your access token (starts with shpat_)
 
 
 // Configure multer for file uploads
