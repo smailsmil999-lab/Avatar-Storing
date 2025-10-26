@@ -6,7 +6,7 @@ const sharp = require('sharp');
 const app = express();
 
 // Replace these with your actual credentials
-const SHOPIFY_STORE = 'cugbvd-j5.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
+const SHOPIFY_STORE = 'gcc1nj-hi.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
 const ACCESS_TOKEN = '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'; // Replace with your access token (starts with shpat_)
 
 
