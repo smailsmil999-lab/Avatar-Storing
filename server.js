@@ -84,7 +84,33 @@ app.get('/', async (req, res) => {
         mf => mf.namespace === 'reviews' && mf.key === 'data'
       );
       
-      const reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
+      let reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
+      
+      // Fetch avatars for each review author
+      for (let review of reviews) {
+        if (review.customer_id) {
+          try {
+            // Fetch customer avatar from metafields
+            const customerResponse = await axios.get(
+              `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${review.customer_id}/metafields.json`,
+              {
+                headers: {
+                  'X-Shopify-Access-Token': ACCESS_TOKEN
+                }
+              }
+            );
+            
+            const avatarMetafield = customerResponse.data.metafields.find(
+              mf => mf.namespace === 'profile' && mf.key === 'avatar_url'
+            );
+            
+            review.avatar_url = avatarMetafield ? avatarMetafield.value : null;
+          } catch (error) {
+            console.error('Error fetching avatar for customer', review.customer_id, error.message);
+            review.avatar_url = null;
+          }
+        }
+      }
       
       res.json({ reviews });
     } catch (error) {
@@ -288,7 +314,7 @@ app.post('/', upload.single('avatar'), async (req, res) => {
   } else if (req.query.path_prefix === '/apps/reviews') {
     // This is a POST request to /apps/reviews
     try {
-      const { product_id, rating, title, body, author, avatar_url, verified, date } = req.body;
+      const { product_id, rating, title, body, author, customer_id, verified, date } = req.body;
       
       if (!product_id || !rating || !title || !body) {
         return res.status(400).json({ error: 'product_id, rating, title, body required' });
@@ -316,7 +342,7 @@ app.post('/', upload.single('avatar'), async (req, res) => {
         title: String(title).slice(0, 120),
         body: String(body),
         author: author ? String(author).slice(0, 80) : 'Anonymous',
-        avatar_url: avatar_url ? String(avatar_url).slice(0, 500) : null,
+        customer_id: customer_id ? parseInt(customer_id) : null,
         verified: Boolean(verified),
         date: date || new Date().toISOString().slice(0, 10)
       };
