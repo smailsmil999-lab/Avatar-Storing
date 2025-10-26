@@ -30,7 +30,7 @@ app.get('/apps/customer-avatar/health', (req, res) => {
   res.json({ status: 'OK' });
 });
 
-// GET avatar endpoint (for App Proxy)
+// GET endpoint (for App Proxy) - handles both avatar and reviews
 app.get('/', async (req, res) => {
   // Check if this is an App Proxy request
   if (req.query.path_prefix === '/apps/customer-avatar') {
@@ -58,6 +58,36 @@ app.get('/', async (req, res) => {
     } catch (error) {
       console.error('Error fetching avatar:', error.response ? error.response.data : error.message);
       res.status(500).json({ url: '', error: 'Failed to fetch avatar' });
+    }
+  } else if (req.query.path_prefix === '/apps/reviews') {
+    // This is a GET request to /apps/reviews
+    try {
+      const productId = req.query.product_id;
+      
+      if (!productId) {
+        return res.status(400).json({ error: 'product_id required' });
+      }
+      
+      // Fetch product metafields to get reviews
+      const response = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/products/${productId}/metafields.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': ACCESS_TOKEN
+          }
+        }
+      );
+      
+      const reviewsMetafield = response.data.metafields.find(
+        mf => mf.namespace === 'reviews' && mf.key === 'data'
+      );
+      
+      const reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
+      
+      res.json({ reviews });
+    } catch (error) {
+      console.error('Error fetching reviews:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to fetch reviews' });
     }
   } else {
     // Not an App Proxy request, return 404
@@ -93,7 +123,7 @@ app.get('/apps/customer-avatar', async (req, res) => {
   }
 });
 
-// POST avatar endpoint (for App Proxy)
+// POST endpoint (for App Proxy) - handles both avatar and reviews
 app.post('/', upload.single('avatar'), async (req, res) => {
   // Check if this is an App Proxy request
   if (req.query.path_prefix === '/apps/customer-avatar') {
@@ -253,6 +283,92 @@ app.post('/', upload.single('avatar'), async (req, res) => {
       console.error('Error status:', error.response ? error.response.status : 'No status');
       res.status(500).json({ error: 'Failed to save avatar', details: error.response ? error.response.data : error.message });
     }
+  } else if (req.query.path_prefix === '/apps/reviews') {
+    // This is a POST request to /apps/reviews
+    try {
+      const { product_id, rating, title, body, author, avatar_url, verified, date } = req.body;
+      
+      if (!product_id || !rating || !title || !body) {
+        return res.status(400).json({ error: 'product_id, rating, title, body required' });
+      }
+      
+      // Get existing reviews
+      const existingResponse = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/products/${product_id}/metafields.json`,
+        {
+          headers: {
+            'X-Shopify-Access-Token': ACCESS_TOKEN
+          }
+        }
+      );
+      
+      const reviewsMetafield = existingResponse.data.metafields.find(
+        mf => mf.namespace === 'reviews' && mf.key === 'data'
+      );
+      
+      const reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
+      
+      // Add new review
+      const newReview = {
+        rating: Math.max(1, Math.min(5, parseInt(rating))),
+        title: String(title).slice(0, 120),
+        body: String(body),
+        author: author ? String(author).slice(0, 80) : 'Anonymous',
+        avatar_url: avatar_url ? String(avatar_url).slice(0, 500) : null,
+        verified: Boolean(verified),
+        date: date || new Date().toISOString().slice(0, 10)
+      };
+      
+      reviews.unshift(newReview);
+      
+      // Update or create metafield
+      const metafieldPayload = {
+        metafield: {
+          namespace: 'reviews',
+          key: 'data',
+          value: JSON.stringify(reviews),
+          type: 'json'
+        }
+      };
+      
+      if (reviewsMetafield) {
+        // Update existing metafield
+        await axios.put(
+          `https://${SHOPIFY_STORE}/admin/api/2023-10/metafields/${reviewsMetafield.id}.json`,
+          metafieldPayload,
+          {
+            headers: {
+              'X-Shopify-Access-Token': ACCESS_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      } else {
+        // Create new metafield
+        await axios.post(
+          `https://${SHOPIFY_STORE}/admin/api/2023-10/metafields.json`,
+          {
+            ...metafieldPayload,
+            metafield: {
+              ...metafieldPayload.metafield,
+              owner_resource: 'product',
+              owner_id: parseInt(product_id)
+            }
+          },
+          {
+            headers: {
+              'X-Shopify-Access-Token': ACCESS_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      }
+      
+      res.json({ reviews });
+    } catch (error) {
+      console.error('Error saving review:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to save review' });
+    }
   } else {
     // Not an App Proxy request, return 404
     res.status(404).json({ error: 'Not found' });
@@ -321,130 +437,6 @@ app.post('/apps/customer-avatar', upload.single('avatar'), async (req, res) => {
     console.error('Error saving avatar:', error.response ? error.response.data : error.message);
     res.status(500).json({ error: 'Failed to save avatar', details: error.response ? error.response.data : error.message });
   }
-});
-
-// Reviews endpoints for App Proxy
-app.get('/apps/reviews', async (req, res) => {
-  try {
-    const productId = req.query.product_id;
-    
-    if (!productId) {
-      return res.status(400).json({ error: 'product_id required' });
-    }
-    
-    // Fetch product metafields to get reviews
-    const response = await axios.get(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/products/${productId}/metafields.json`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': ACCESS_TOKEN
-        }
-      }
-    );
-    
-    const reviewsMetafield = response.data.metafields.find(
-      mf => mf.namespace === 'reviews' && mf.key === 'data'
-    );
-    
-    const reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
-    
-    res.json({ reviews });
-  } catch (error) {
-    console.error('Error fetching reviews:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Failed to fetch reviews' });
-  }
-});
-
-app.post('/apps/reviews', async (req, res) => {
-  try {
-    const { product_id, rating, title, body, author, avatar_url, verified, date } = req.body;
-    
-    if (!product_id || !rating || !title || !body) {
-      return res.status(400).json({ error: 'product_id, rating, title, body required' });
-    }
-    
-    // Get existing reviews
-    const existingResponse = await axios.get(
-      `https://${SHOPIFY_STORE}/admin/api/2023-10/products/${productId}/metafields.json`,
-      {
-        headers: {
-          'X-Shopify-Access-Token': ACCESS_TOKEN
-        }
-      }
-    );
-    
-    const reviewsMetafield = existingResponse.data.metafields.find(
-      mf => mf.namespace === 'reviews' && mf.key === 'data'
-    );
-    
-    const reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
-    
-    // Add new review
-    const newReview = {
-      rating: Math.max(1, Math.min(5, parseInt(rating))),
-      title: String(title).slice(0, 120),
-      body: String(body),
-      author: author ? String(author).slice(0, 80) : 'Anonymous',
-      avatar_url: avatar_url ? String(avatar_url).slice(0, 500) : null,
-      verified: Boolean(verified),
-      date: date || new Date().toISOString().slice(0, 10)
-    };
-    
-    reviews.unshift(newReview);
-    
-    // Update or create metafield
-    const metafieldPayload = {
-      metafield: {
-        namespace: 'reviews',
-        key: 'data',
-        value: JSON.stringify(reviews),
-        type: 'json'
-      }
-    };
-    
-    if (reviewsMetafield) {
-      // Update existing metafield
-      await axios.put(
-        `https://${SHOPIFY_STORE}/admin/api/2023-10/metafields/${reviewsMetafield.id}.json`,
-        metafieldPayload,
-        {
-          headers: {
-            'X-Shopify-Access-Token': ACCESS_TOKEN,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    } else {
-      // Create new metafield
-      await axios.post(
-        `https://${SHOPIFY_STORE}/admin/api/2023-10/metafields.json`,
-        {
-          ...metafieldPayload,
-          metafield: {
-            ...metafieldPayload.metafield,
-            owner_resource: 'product',
-            owner_id: parseInt(product_id)
-          }
-        },
-        {
-          headers: {
-            'X-Shopify-Access-Token': ACCESS_TOKEN,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    }
-    
-    res.json({ reviews });
-  } catch (error) {
-    console.error('Error saving review:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Failed to save review' });
-  }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
 });
 
 const PORT = process.env.PORT || 3000;
