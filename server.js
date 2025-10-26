@@ -16,9 +16,9 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-// Enable CORS for all routes with specific origin
+// Enable CORS for all routes - more permissive for testing
 app.use(cors({
-  origin: ['https://gcc1nj-hi.myshopify.com', 'https://gcc1nj-hi.myshopify.com/*'],
+  origin: true, // Allow all origins for testing
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
@@ -37,6 +37,15 @@ app.options('*', (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'OK' });
+});
+
+// Simple test endpoint
+app.get('/test', (req, res) => {
+  res.json({ 
+    message: 'Server is working!', 
+    timestamp: new Date().toISOString(),
+    origin: req.headers.origin 
+  });
 });
 
 // App Proxy health check endpoint
