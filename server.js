@@ -32,6 +32,8 @@ app.get('/apps/customer-avatar/health', (req, res) => {
 
 // GET endpoint (for App Proxy) - handles both avatar and reviews
 app.get('/', async (req, res) => {
+  console.log('GET request received:', req.query);
+  console.log('Path prefix:', req.query.path_prefix);
   // Check if this is an App Proxy request
   if (req.query.path_prefix === '/apps/customer-avatar') {
     // This is a GET request to /apps/customer-avatar
