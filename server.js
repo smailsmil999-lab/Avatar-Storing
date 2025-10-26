@@ -28,7 +28,7 @@ app.use(express.urlencoded({ extended: true, limit: '5mb' })); // For URL-encode
 
 // Handle preflight OPTIONS requests
 app.options('*', (req, res) => {
-  res.header('Access-Control-Allow-Origin', 'https://gcc1nj-hi.myshopify.com');
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   res.sendStatus(200);
@@ -56,12 +56,13 @@ app.get('/apps/customer-avatar/health', (req, res) => {
 // GET endpoint (for App Proxy) - handles both avatar and reviews
 app.get('/', async (req, res) => {
   // Set CORS headers
-  res.header('Access-Control-Allow-Origin', 'https://gcc1nj-hi.myshopify.com');
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   
   console.log('GET request received:', req.query);
   console.log('Path prefix:', req.query.path_prefix);
+  
   // Check if this is an App Proxy request
   if (req.query.path_prefix === '/apps/customer-avatar') {
     // This is a GET request to /apps/customer-avatar
@@ -98,6 +99,8 @@ app.get('/', async (req, res) => {
         return res.status(400).json({ error: 'product_id required' });
       }
       
+      console.log('Fetching reviews for product:', productId);
+      
       // Fetch product metafields to get reviews
       const response = await axios.get(
         `https://${SHOPIFY_STORE}/admin/api/2023-10/products/${productId}/metafields.json`,
@@ -114,10 +117,13 @@ app.get('/', async (req, res) => {
       
       let reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
       
+      console.log('Found reviews:', reviews.length);
+      
       // Fetch avatars for each review author
       for (let review of reviews) {
         if (review.customer_id) {
           try {
+            console.log('Fetching avatar for customer:', review.customer_id);
             // Fetch customer avatar from metafields
             const customerResponse = await axios.get(
               `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${review.customer_id}/metafields.json`,
@@ -133,6 +139,7 @@ app.get('/', async (req, res) => {
             );
             
             review.avatar_url = avatarMetafield ? avatarMetafield.value : null;
+            console.log('Avatar found for customer:', review.customer_id, review.avatar_url ? 'Yes' : 'No');
           } catch (error) {
             console.error('Error fetching avatar for customer', review.customer_id, error.message);
             review.avatar_url = null;
@@ -140,6 +147,7 @@ app.get('/', async (req, res) => {
         }
       }
       
+      console.log('Returning reviews with avatars:', reviews);
       res.json({ reviews });
     } catch (error) {
       console.error('Error fetching reviews:', error.response ? error.response.data : error.message);
@@ -182,7 +190,7 @@ app.get('/apps/customer-avatar', async (req, res) => {
 // POST endpoint (for App Proxy) - handles both avatar and reviews
 app.post('/', upload.single('avatar'), async (req, res) => {
   // Set CORS headers
-  res.header('Access-Control-Allow-Origin', 'https://gcc1nj-hi.myshopify.com');
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   
@@ -353,6 +361,8 @@ app.post('/', upload.single('avatar'), async (req, res) => {
         return res.status(400).json({ error: 'product_id, rating, title, body required' });
       }
       
+      console.log('Saving review:', { product_id, rating, title, author, customer_id });
+      
       // Get existing reviews
       const existingResponse = await axios.get(
         `https://${SHOPIFY_STORE}/admin/api/2023-10/products/${product_id}/metafields.json`,
@@ -382,6 +392,8 @@ app.post('/', upload.single('avatar'), async (req, res) => {
       
       reviews.unshift(newReview);
       
+      console.log('New review added:', newReview);
+      
       // Update or create metafield
       const metafieldPayload = {
         metafield: {
@@ -404,6 +416,7 @@ app.post('/', upload.single('avatar'), async (req, res) => {
             }
           }
         );
+        console.log('Updated existing metafield');
       } else {
         // Create new metafield
         await axios.post(
@@ -423,6 +436,7 @@ app.post('/', upload.single('avatar'), async (req, res) => {
             }
           }
         );
+        console.log('Created new metafield');
       }
       
       res.json({ reviews });
