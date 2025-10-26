@@ -16,9 +16,23 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
 });
 
-app.use(cors()); // Enable CORS for all routes
+// Enable CORS for all routes with specific origin
+app.use(cors({
+  origin: ['https://gcc1nj-hi.myshopify.com', 'https://gcc1nj-hi.myshopify.com/*'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
+}));
 app.use(express.json({ limit: '5mb' })); // Increase JSON body limit for data URLs
 app.use(express.urlencoded({ extended: true, limit: '5mb' })); // For URL-encoded bodies
+
+// Handle preflight OPTIONS requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', 'https://gcc1nj-hi.myshopify.com');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.sendStatus(200);
+});
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -32,6 +46,11 @@ app.get('/apps/customer-avatar/health', (req, res) => {
 
 // GET endpoint (for App Proxy) - handles both avatar and reviews
 app.get('/', async (req, res) => {
+  // Set CORS headers
+  res.header('Access-Control-Allow-Origin', 'https://gcc1nj-hi.myshopify.com');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  
   console.log('GET request received:', req.query);
   console.log('Path prefix:', req.query.path_prefix);
   // Check if this is an App Proxy request
@@ -153,6 +172,11 @@ app.get('/apps/customer-avatar', async (req, res) => {
 
 // POST endpoint (for App Proxy) - handles both avatar and reviews
 app.post('/', upload.single('avatar'), async (req, res) => {
+  // Set CORS headers
+  res.header('Access-Control-Allow-Origin', 'https://gcc1nj-hi.myshopify.com');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  
   // Check if this is an App Proxy request
   if (req.query.path_prefix === '/apps/customer-avatar') {
     // This is a POST request to /apps/customer-avatar
