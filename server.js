@@ -48,6 +48,66 @@ app.get('/test', (req, res) => {
   });
 });
 
+// ===== CART & WISHLIST SYNC ENDPOINTS =====
+
+// GET wishlist for customer
+app.get('/', async (req, res) => {
+  // Check if this is a wishlist sync request
+  if (req.query.path_prefix === '/apps/wishlist-sync') {
+    try {
+      const customerId = req.query.customer_id;
+      if (!customerId) {
+        return res.status(400).json({ error: 'Customer ID required' });
+      }
+
+      // Fetch customer wishlist metafield
+      const response = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
+        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN } }
+      );
+
+      const wishlistMetafield = response.data.metafields.find(
+        mf => mf.namespace === 'wishlist' && mf.key === 'items'
+      );
+
+      const wishlistItems = wishlistMetafield ? JSON.parse(wishlistMetafield.value) : [];
+      
+      res.json({ wishlist: wishlistItems });
+    } catch (error) {
+      console.error('Error fetching wishlist:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to fetch wishlist' });
+    }
+    return;
+  }
+
+  // Check if this is an App Proxy request for customer avatar
+  if (req.query.path_prefix === '/apps/customer-avatar') {
+    // Existing avatar logic...
+    try {
+      const customerId = req.query.id;
+      // Fetch customer metafields
+      const response = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
+        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN } }
+      );
+
+      const avatarMetafield = response.data.metafields.find(
+        mf => mf.namespace === 'profile' && mf.key === 'avatar_url'
+      );
+
+      const avatarUrl = avatarMetafield ? avatarMetafield.value : '';
+      res.json({ url: avatarUrl });
+    } catch (error) {
+      console.error('Error fetching avatar:', error.response ? error.response.data : error.message);
+      res.status(500).json({ url: '', error: 'Failed to fetch avatar' });
+    }
+    return;
+  }
+
+  // Not a recognized request, return 404
+  res.status(404).json({ error: 'Not found' });
+});
+
 // App Proxy health check endpoint
 app.get('/apps/customer-avatar/health', (req, res) => {
   res.json({ status: 'OK' });
@@ -187,14 +247,46 @@ app.get('/apps/customer-avatar', async (req, res) => {
   }
 });
 
-// POST endpoint (for App Proxy) - handles both avatar and reviews
+// POST endpoint (for App Proxy) - handles avatar, reviews, and wishlist sync
 app.post('/', upload.single('avatar'), async (req, res) => {
   // Set CORS headers
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   
-  // Check if this is an App Proxy request
+  // Check if this is a wishlist sync request
+  if (req.query.path_prefix === '/apps/wishlist-sync') {
+    try {
+      const { customer_id, wishlist } = req.body;
+      if (!customer_id) {
+        return res.status(400).json({ error: 'Customer ID required' });
+      }
+
+      // Save wishlist to customer metafield
+      const metafieldPayload = {
+        metafield: {
+          namespace: 'wishlist',
+          key: 'items',
+          value: JSON.stringify(wishlist || []),
+          type: 'multi_line_text_field'
+        }
+      };
+
+      await axios.post(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer_id}/metafields.json`,
+        metafieldPayload,
+        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN, 'Content-Type': 'application/json' } }
+      );
+
+      res.json({ success: true, message: 'Wishlist synced successfully' });
+    } catch (error) {
+      console.error('Error syncing wishlist:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to sync wishlist' });
+    }
+    return;
+  }
+  
+  // Check if this is an App Proxy request for customer avatar
   if (req.query.path_prefix === '/apps/customer-avatar') {
     // This is a POST request to /apps/customer-avatar
     try {
