@@ -123,6 +123,33 @@ app.get('/', async (req, res) => {
   console.log('GET request received:', req.query);
   console.log('Path prefix:', req.query.path_prefix);
   
+  // Check if this is a cart sync request
+  if (req.query.path_prefix === '/apps/cart-sync') {
+    try {
+      const customerId = req.query.customer_id;
+      if (!customerId) {
+        return res.status(400).json({ error: 'Customer ID required' });
+      }
+
+      // Fetch customer cart metafield
+      const response = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
+        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN } }
+      );
+
+      const cartMetafield = response.data.metafields.find(
+        mf => mf.namespace === 'cart' && mf.key === 'items'
+      );
+
+      const cart = cartMetafield ? JSON.parse(cartMetafield.value) : { items: [], item_count: 0, total_price: 0 };
+      res.json({ cart });
+    } catch (error) {
+      console.error('Error fetching cart:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to fetch cart' });
+    }
+    return;
+  }
+
   // Check if this is an App Proxy request
   if (req.query.path_prefix === '/apps/customer-avatar') {
     // This is a GET request to /apps/customer-avatar
@@ -254,6 +281,70 @@ app.post('/', upload.single('avatar'), async (req, res) => {
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   
+  // Check if this is a cart sync request
+  if (req.query.path_prefix === '/apps/cart-sync') {
+    try {
+      const { customer_id, cart } = req.body;
+      if (!customer_id) {
+        return res.status(400).json({ error: 'Customer ID required' });
+      }
+
+      console.log('Saving cart for customer:', customer_id, 'Items:', cart.item_count);
+      
+      // First, check if metafield already exists
+      const existingMetafields = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer_id}/metafields.json`,
+        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN } }
+      );
+      
+      const existingMetafield = existingMetafields.data.metafields.find(
+        mf => mf.namespace === 'cart' && mf.key === 'items'
+      );
+      
+      let response;
+      if (existingMetafield) {
+        // Update existing metafield
+        console.log('Updating existing cart metafield:', existingMetafield.id);
+        const metafieldPayload = {
+          metafield: {
+            id: existingMetafield.id,
+            value: JSON.stringify(cart || { items: [], item_count: 0, total_price: 0 })
+          }
+        };
+        
+        response = await axios.put(
+          `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer_id}/metafields/${existingMetafield.id}.json`,
+          metafieldPayload,
+          { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        // Create new metafield
+        console.log('Creating new cart metafield');
+        const metafieldPayload = {
+          metafield: {
+            namespace: 'cart',
+            key: 'items',
+            value: JSON.stringify(cart || { items: [], item_count: 0, total_price: 0 }),
+            type: 'multi_line_text_field'
+          }
+        };
+        
+        response = await axios.post(
+          `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer_id}/metafields.json`,
+          metafieldPayload,
+          { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('Cart metafield saved successfully:', response.data);
+      res.json({ success: true, message: 'Cart synced successfully' });
+    } catch (error) {
+      console.error('Error syncing cart:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to sync cart' });
+    }
+    return;
+  }
+
   // Check if this is a wishlist sync request
   if (req.query.path_prefix === '/apps/wishlist-sync') {
     try {
