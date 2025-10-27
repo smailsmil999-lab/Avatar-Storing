@@ -52,6 +52,33 @@ app.get('/test', (req, res) => {
 
 // GET wishlist for customer
 app.get('/', async (req, res) => {
+  // Check if this is a cart sync request
+  if (req.query.path_prefix === '/apps/cart-sync') {
+    try {
+      const customerId = req.query.customer_id;
+      if (!customerId) {
+        return res.status(400).json({ error: 'Customer ID required' });
+      }
+
+      // Fetch customer cart metafield
+      const response = await axios.get(
+        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
+        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN } }
+      );
+
+      const cartMetafield = response.data.metafields.find(
+        mf => mf.namespace === 'cart' && mf.key === 'items'
+      );
+
+      const cart = cartMetafield ? JSON.parse(cartMetafield.value) : { items: [], item_count: 0, total_price: 0 };
+      res.json({ cart });
+    } catch (error) {
+      console.error('Error fetching cart:', error.response ? error.response.data : error.message);
+      res.status(500).json({ error: 'Failed to fetch cart' });
+    }
+    return;
+  }
+
   // Check if this is a wishlist sync request
   if (req.query.path_prefix === '/apps/wishlist-sync') {
     try {
@@ -111,139 +138,6 @@ app.get('/', async (req, res) => {
 // App Proxy health check endpoint
 app.get('/apps/customer-avatar/health', (req, res) => {
   res.json({ status: 'OK' });
-});
-
-// GET endpoint (for App Proxy) - handles both avatar and reviews
-app.get('/', async (req, res) => {
-  // Set CORS headers
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
-  
-  console.log('GET request received:', req.query);
-  console.log('Path prefix:', req.query.path_prefix);
-  
-  // Check if this is a cart sync request
-  if (req.query.path_prefix === '/apps/cart-sync') {
-    try {
-      const customerId = req.query.customer_id;
-      if (!customerId) {
-        return res.status(400).json({ error: 'Customer ID required' });
-      }
-
-      // Fetch customer cart metafield
-      const response = await axios.get(
-        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
-        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN } }
-      );
-
-      const cartMetafield = response.data.metafields.find(
-        mf => mf.namespace === 'cart' && mf.key === 'items'
-      );
-
-      const cart = cartMetafield ? JSON.parse(cartMetafield.value) : { items: [], item_count: 0, total_price: 0 };
-      res.json({ cart });
-    } catch (error) {
-      console.error('Error fetching cart:', error.response ? error.response.data : error.message);
-      res.status(500).json({ error: 'Failed to fetch cart' });
-    }
-    return;
-  }
-
-  // Check if this is an App Proxy request
-  if (req.query.path_prefix === '/apps/customer-avatar') {
-    // This is a GET request to /apps/customer-avatar
-    try {
-      const customerId = req.query.id;
-      
-      // Fetch customer metafields
-      const response = await axios.get(
-        `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customerId}/metafields.json`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': ACCESS_TOKEN
-          }
-        }
-      );
-      
-      const avatarMetafield = response.data.metafields.find(
-        mf => mf.namespace === 'profile' && mf.key === 'avatar_url'
-      );
-      
-      const avatarUrl = avatarMetafield ? avatarMetafield.value : '';
-      
-      res.json({ url: avatarUrl });
-    } catch (error) {
-      console.error('Error fetching avatar:', error.response ? error.response.data : error.message);
-      res.status(500).json({ url: '', error: 'Failed to fetch avatar' });
-    }
-  } else if (req.query.path_prefix === '/apps/reviews') {
-    // This is a GET request to /apps/reviews
-    try {
-      const productId = req.query.product_id;
-      
-      if (!productId) {
-        return res.status(400).json({ error: 'product_id required' });
-      }
-      
-      console.log('Fetching reviews for product:', productId);
-      
-      // Fetch product metafields to get reviews
-      const response = await axios.get(
-        `https://${SHOPIFY_STORE}/admin/api/2023-10/products/${productId}/metafields.json`,
-        {
-          headers: {
-            'X-Shopify-Access-Token': ACCESS_TOKEN
-          }
-        }
-      );
-      
-      const reviewsMetafield = response.data.metafields.find(
-        mf => mf.namespace === 'reviews' && mf.key === 'data'
-      );
-      
-      let reviews = reviewsMetafield ? JSON.parse(reviewsMetafield.value) : [];
-      
-      console.log('Found reviews:', reviews.length);
-      
-      // Fetch avatars for each review author
-      for (let review of reviews) {
-        if (review.customer_id) {
-          try {
-            console.log('Fetching avatar for customer:', review.customer_id);
-            // Fetch customer avatar from metafields
-            const customerResponse = await axios.get(
-              `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${review.customer_id}/metafields.json`,
-              {
-                headers: {
-                  'X-Shopify-Access-Token': ACCESS_TOKEN
-                }
-              }
-            );
-            
-            const avatarMetafield = customerResponse.data.metafields.find(
-              mf => mf.namespace === 'profile' && mf.key === 'avatar_url'
-            );
-            
-            review.avatar_url = avatarMetafield ? avatarMetafield.value : null;
-            console.log('Avatar found for customer:', review.customer_id, review.avatar_url ? 'Yes' : 'No');
-          } catch (error) {
-            console.error('Error fetching avatar for customer', review.customer_id, error.message);
-            review.avatar_url = null;
-          }
-        }
-      }
-      
-      console.log('Returning reviews with avatars:', reviews);
-      res.json({ reviews });
-    } catch (error) {
-      console.error('Error fetching reviews:', error.response ? error.response.data : error.message);
-      res.status(500).json({ error: 'Failed to fetch reviews' });
-    }
-  } else {
-    // Not an App Proxy request, return 404
-    res.status(404).json({ error: 'Not found' });
-  }
 });
 
 // GET avatar endpoint (direct access)
