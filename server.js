@@ -263,21 +263,54 @@ app.post('/', upload.single('avatar'), async (req, res) => {
       }
 
       // Save wishlist to customer metafield
-      const metafieldPayload = {
-        metafield: {
-          namespace: 'wishlist',
-          key: 'items',
-          value: JSON.stringify(wishlist || []),
-          type: 'multi_line_text_field'
-        }
-      };
-
-      await axios.post(
+      console.log('Saving wishlist for customer:', customer_id, 'Items:', wishlist.length);
+      
+      // First, check if metafield already exists
+      const existingMetafields = await axios.get(
         `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer_id}/metafields.json`,
-        metafieldPayload,
-        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN, 'Content-Type': 'application/json' } }
+        { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN } }
       );
+      
+      const existingMetafield = existingMetafields.data.metafields.find(
+        mf => mf.namespace === 'wishlist' && mf.key === 'items'
+      );
+      
+      let response;
+      if (existingMetafield) {
+        // Update existing metafield
+        console.log('Updating existing metafield:', existingMetafield.id);
+        const metafieldPayload = {
+          metafield: {
+            id: existingMetafield.id,
+            value: JSON.stringify(wishlist || [])
+          }
+        };
+        
+        response = await axios.put(
+          `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer_id}/metafields/${existingMetafield.id}.json`,
+          metafieldPayload,
+          { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN, 'Content-Type': 'application/json' } }
+        );
+      } else {
+        // Create new metafield
+        console.log('Creating new metafield');
+        const metafieldPayload = {
+          metafield: {
+            namespace: 'wishlist',
+            key: 'items',
+            value: JSON.stringify(wishlist || []),
+            type: 'multi_line_text_field'
+          }
+        };
+        
+        response = await axios.post(
+          `https://${SHOPIFY_STORE}/admin/api/2023-10/customers/${customer_id}/metafields.json`,
+          metafieldPayload,
+          { headers: { 'X-Shopify-Access-Token': ACCESS_TOKEN, 'Content-Type': 'application/json' } }
+        );
+      }
 
+      console.log('Metafield saved successfully:', response.data);
       res.json({ success: true, message: 'Wishlist synced successfully' });
     } catch (error) {
       console.error('Error syncing wishlist:', error.response ? error.response.data : error.message);
