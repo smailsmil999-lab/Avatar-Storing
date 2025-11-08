@@ -51,6 +51,14 @@ app.get('/test', (req, res) => {
 
 // ===== CART COUNT TRACKING ENDPOINT =====
 
+// Handle OPTIONS preflight specifically for cart-count
+app.options('/api/cart-count', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.sendStatus(200);
+});
+
 // Cart Count API Route - tracks how many people have items in their cart
 app.all('/api/cart-count', async (req, res) => {
   // Set CORS headers for all responses
@@ -58,7 +66,7 @@ app.all('/api/cart-count', async (req, res) => {
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
   
-  // Handle CORS preflight (OPTIONS request)
+  // Handle CORS preflight (OPTIONS request) - redundant but safe
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
