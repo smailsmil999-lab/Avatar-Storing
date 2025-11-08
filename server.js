@@ -6,8 +6,8 @@ const sharp = require('sharp');
 const app = express();
 
 // Replace these with your actual credentials
-const SHOPIFY_STORE = 'jjnvat-3z.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
-const ACCESS_TOKEN = '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'; // Replace with your access token (starts with shpat_)
+const SHOPIFY_STORE = 'ubizt2-wx.myshopify.com'; // Replace with your store URL (e.g., 'my-store.myshopify.com')
+const ACCESS_TOKEN = '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'; // Replace with your access token (starts with shpat_)
 
 
 // Configure multer for file uploads
