@@ -53,6 +53,16 @@ app.get('/test', (req, res) => {
 
 // Cart Count API Route - tracks how many people have items in their cart
 app.all('/api/cart-count', async (req, res) => {
+  // Set CORS headers for all responses
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  
+  // Handle CORS preflight (OPTIONS request)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
     // GET: Fetch cart count for a variant
     if (req.method === 'GET') {
