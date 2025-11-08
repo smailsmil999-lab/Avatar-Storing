@@ -59,8 +59,16 @@ app.options('/api/cart-count', (req, res) => {
   res.sendStatus(200);
 });
 
-// Cart Count API Route - tracks how many people have items in their cart
-app.all('/api/cart-count', async (req, res) => {
+// Also handle /cart-count (without /api prefix) as backup
+app.options('/cart-count', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept');
+  res.sendStatus(200);
+});
+
+// Cart count handler function (shared between routes)
+async function handleCartCount(req, res) {
   // Set CORS headers for all responses
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -156,7 +164,14 @@ app.all('/api/cart-count', async (req, res) => {
       message: error.message 
     });
   }
-});
+}
+
+// Cart Count API Route - tracks how many people have items in their cart
+// Using /api/cart-count (Vercel might intercept this, so we also have /cart-count below)
+app.all('/api/cart-count', handleCartCount);
+
+// Also provide route without /api prefix as backup (in case Vercel intercepts /api/*)
+app.all('/cart-count', handleCartCount);
 
 // ===== CART & WISHLIST SYNC ENDPOINTS =====
 
